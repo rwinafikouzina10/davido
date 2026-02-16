@@ -1,0 +1,77 @@
+{
+  "space_types": {
+    "truck": {
+      "name": "Large Truck / Semi-trailer",
+      "min_length": 18.0,
+      "min_width": 3.5,
+      "default_length": 18.5,
+      "default_width": 3.5,
+      "color": "#3498db",
+      "turning_radius": 12.5,
+      "description": "Standard parking for articulated trucks and semi-trailers"
+    },
+    "tractor": {
+      "name": "Truck Tractor Only",
+      "min_length": 8.0,
+      "min_width": 3.5,
+      "default_length": 8.5,
+      "default_width": 3.5,
+      "color": "#e67e22",
+      "turning_radius": 10.0,
+      "description": "Tractor units without attached trailer"
+    },
+    "trailer": {
+      "name": "Trailer Only",
+      "min_length": 14.0,
+      "min_width": 3.5,
+      "default_length": 14.5,
+      "default_width": 3.5,
+      "color": "#9b59b6",
+      "turning_radius": 0,
+      "description": "Parked trailers without tractor"
+    },
+    "ev": {
+      "name": "EV Charging",
+      "min_length": 18.0,
+      "min_width": 4.0,
+      "default_length": 18.5,
+      "default_width": 4.0,
+      "color": "#27ae60",
+      "turning_radius": 12.5,
+      "description": "Truck parking with electric vehicle charging"
+    },
+    "van": {
+      "name": "Small Van",
+      "min_length": 7.0,
+      "min_width": 2.5,
+      "default_length": 8.0,
+      "default_width": 3.0,
+      "color": "#f39c12",
+      "turning_radius": 8.0,
+      "description": "Smaller commercial vehicles and vans"
+    }
+  },
+  "compliance": {
+    "min_vehicle_spacing": 1.0,
+    "lane_width_oneway": 5.0,
+    "lane_width_twoway": 7.0,
+    "lane_width_recommended_oneway": 6.0,
+    "lane_width_recommended_twoway": 8.0,
+    "fire_access_width": 4.5,
+    "fire_access_max_distance": 10.0,
+    "max_dead_end": 50.0
+  },
+  "pricing": {
+    "4_week": 208.0,
+    "annual": 2433.60,
+    "daily_estimate": 8.5
+  },
+  "site": {
+    "width_narrow": 27.0,
+    "width_wide": 74.0,
+    "length": 145.0,
+    "area": 7500.0,
+    "min_spaces": 48,
+    "revenue_target": 200000
+  }
+}

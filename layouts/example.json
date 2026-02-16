@@ -1,0 +1,37 @@
+{
+  "name": "Default Layout",
+  "created": "2026-02-16",
+  "description": "Initial layout based on site blueprints",
+  "lot": {
+    "width": 74,
+    "length": 145,
+    "shape": "triangular",
+    "boundary": [
+      [0, 0],
+      [27, 0],
+      [74, 145],
+      [0, 145]
+    ]
+  },
+  "spaces": [
+    {"id": 1, "type": "ev", "x": 5, "y": 10, "length": 18.5, "width": 4.0, "rotation": 0, "label": "EV-1"},
+    {"id": 2, "type": "ev", "x": 5, "y": 15, "length": 18.5, "width": 4.0, "rotation": 0, "label": "EV-2"},
+    {"id": 3, "type": "truck", "x": 5, "y": 25, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-3"},
+    {"id": 4, "type": "truck", "x": 5, "y": 29, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-4"},
+    {"id": 5, "type": "truck", "x": 5, "y": 33, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-5"},
+    {"id": 6, "type": "truck", "x": 5, "y": 37, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-6"},
+    {"id": 7, "type": "truck", "x": 5, "y": 41, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-7"},
+    {"id": 8, "type": "truck", "x": 5, "y": 45, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-8"},
+    {"id": 9, "type": "truck", "x": 5, "y": 49, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-9"},
+    {"id": 10, "type": "truck", "x": 5, "y": 53, "length": 18.5, "width": 3.5, "rotation": 0, "label": "T-10"},
+    {"id": 29, "type": "tractor", "x": 30, "y": 80, "length": 8.5, "width": 3.5, "rotation": 0, "label": "TR-29"},
+    {"id": 30, "type": "tractor", "x": 30, "y": 84, "length": 8.5, "width": 3.5, "rotation": 0, "label": "TR-30"},
+    {"id": 31, "type": "tractor", "x": 30, "y": 88, "length": 8.5, "width": 3.5, "rotation": 0, "label": "TR-31"},
+    {"id": 32, "type": "tractor", "x": 30, "y": 92, "length": 8.5, "width": 3.5, "rotation": 0, "label": "TR-32"},
+    {"id": 37, "type": "trailer", "x": 45, "y": 100, "length": 14.5, "width": 3.5, "rotation": 0, "label": "TL-37"},
+    {"id": 38, "type": "trailer", "x": 45, "y": 104, "length": 14.5, "width": 3.5, "rotation": 0, "label": "TL-38"}
+  ],
+  "lanes": [
+    {"id": "main", "type": "twoway", "width": 8.0, "path": [[10, 0], [35, 70], [60, 145]]}
+  ]
+}
