@@ -79,6 +79,39 @@ st.markdown("""
     [data-testid="stSidebar"] * {
         color: #e2e8f0 !important;
     }
+    [data-testid="stSidebar"] [data-baseweb="input"] > div,
+    [data-testid="stSidebar"] [data-baseweb="textarea"] > div,
+    [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        background: rgba(2, 12, 27, 0.75) !important;
+        border: 1px solid rgba(148, 163, 184, 0.32) !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="input"] input,
+    [data-testid="stSidebar"] [data-baseweb="textarea"] textarea,
+    [data-testid="stSidebar"] [data-baseweb="select"] * {
+        color: #e2e8f0 !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="tag"] {
+        background: rgba(14, 165, 233, 0.25) !important;
+        color: #e0f2fe !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="button-group"] button {
+        background: rgba(2, 12, 27, 0.75) !important;
+        color: #e2e8f0 !important;
+        border: 1px solid rgba(148, 163, 184, 0.32) !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="button-group"] button[aria-pressed="true"] {
+        background: #0ea5e9 !important;
+        color: #ffffff !important;
+        border-color: #38bdf8 !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stAlertContainer"] {
+        background: rgba(14, 116, 180, 0.35) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 10px;
+    }
+    [data-testid="stSidebar"] [data-testid="stAlertContainer"] * {
+        color: #e0f2fe !important;
+    }
     .tp-kicker {
         font-size: 0.8rem;
         font-weight: 700;
