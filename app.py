@@ -30,20 +30,70 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 10px;
-        border-radius: 5px;
+    [data-testid="stMetric"] {
+        background-color: #262730;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #3d3d3d;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #a0a0a0 !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-size: 2rem !important;
     }
     .status-valid { color: #27ae60; font-weight: bold; }
     .status-warning { color: #f39c12; font-weight: bold; }
     .status-error { color: #e74c3c; font-weight: bold; }
     div[data-testid="stExpander"] {
-        background-color: #f9f9f9;
+        background-color: #1e1e1e;
         border-radius: 5px;
+    }
+    .optimization-progress {
+        padding: 10px;
+        background-color: #1a1a2e;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+# Preset boundaries for quick selection
+PRESET_BOUNDARIES = {
+    "Havenweg (Triangular)": {
+        "boundary": [(0, 0), (27, 0), (74, 145), (0, 145)],
+        "entry": (13, 0),
+        "exit": (37, 145),
+        "description": "Original Havenweg 4, Echt site - triangular shape"
+    },
+    "Rectangle (50x100)": {
+        "boundary": [(0, 0), (50, 0), (50, 100), (0, 100)],
+        "entry": (25, 0),
+        "exit": (25, 100),
+        "description": "Standard rectangular lot"
+    },
+    "Rectangle (80x120)": {
+        "boundary": [(0, 0), (80, 0), (80, 120), (0, 120)],
+        "entry": (40, 0),
+        "exit": (40, 120),
+        "description": "Large rectangular lot"
+    },
+    "L-Shape": {
+        "boundary": [(0, 0), (60, 0), (60, 60), (30, 60), (30, 100), (0, 100)],
+        "entry": (30, 0),
+        "exit": (15, 100),
+        "description": "L-shaped lot with two wings"
+    },
+    "Wide Triangle": {
+        "boundary": [(0, 0), (100, 0), (50, 80)],
+        "entry": (50, 0),
+        "exit": (50, 80),
+        "description": "Wide triangular lot"
+    },
+}
 
 
 def init_session_state():
@@ -65,6 +115,12 @@ def init_session_state():
     
     if "occupancy_rate" not in st.session_state:
         st.session_state.occupancy_rate = 75
+    
+    if "optimization_log" not in st.session_state:
+        st.session_state.optimization_log = []
+    
+    if "custom_boundary" not in st.session_state:
+        st.session_state.custom_boundary = None
 
 
 def render_sidebar():
@@ -80,16 +136,61 @@ def render_sidebar():
         )
         
         # Tabs for different operations
-        tab1, tab2, tab3 = st.tabs(["➕ Add", "📂 Load/Save", "⚙️ Settings"])
+        tab1, tab2, tab3, tab4 = st.tabs(["🤖 Auto", "➕ Add", "📂 Load/Save", "⚙️ Settings"])
         
         with tab1:
-            render_add_space_form()
+            render_auto_generate_sidebar()
         
         with tab2:
-            render_load_save()
+            render_add_space_form()
         
         with tab3:
+            render_load_save()
+        
+        with tab4:
             render_settings()
+
+
+def render_auto_generate_sidebar():
+    """Render the auto-generate controls in sidebar."""
+    st.subheader("🤖 Auto-Generate Layout")
+    
+    st.info("💡 Use the Auto-Generate panel in the main area for full controls, or quick-generate here.")
+    
+    # Quick preset selection
+    preset = st.selectbox(
+        "Quick Preset",
+        options=list(PRESET_BOUNDARIES.keys()),
+        key="sidebar_preset"
+    )
+    
+    preset_data = PRESET_BOUNDARIES[preset]
+    st.caption(preset_data["description"])
+    
+    # Quick optimization goal
+    goal = st.radio(
+        "Goal",
+        options=["Maximize Revenue", "Maximize Spaces", "Prioritize Trucks"],
+        horizontal=True,
+        key="sidebar_goal"
+    )
+    
+    goal_map = {
+        "Maximize Revenue": "maximize_revenue",
+        "Maximize Spaces": "maximize_count",
+        "Prioritize Trucks": "maximize_trucks",
+    }
+    
+    if st.button("⚡ Quick Generate", type="primary", use_container_width=True):
+        run_optimization(
+            boundary=preset_data["boundary"],
+            entry_point=preset_data["entry"],
+            exit_point=preset_data["exit"],
+            optimization_goal=goal_map[goal],
+            lane_type="oneway",
+            time_limit=15.0,
+        )
+        st.rerun()
 
 
 def render_add_space_form():
@@ -212,6 +313,269 @@ def render_settings():
         st.rerun()
 
 
+def run_optimization(
+    boundary,
+    entry_point,
+    exit_point,
+    optimization_goal,
+    lane_type,
+    time_limit,
+    vehicle_mix=None,
+):
+    """Run the optimization and update session state."""
+    try:
+        from src.optimizer import optimize_layout
+        
+        st.session_state.optimization_log = []
+        
+        def log_callback(message):
+            st.session_state.optimization_log.append(message)
+        
+        result = optimize_layout(
+            boundary=boundary,
+            entry_point=entry_point,
+            exit_point=exit_point,
+            optimization_goal=optimization_goal,
+            lane_type=lane_type,
+            time_limit=time_limit,
+            vehicle_mix=vehicle_mix,
+            layout_name=st.session_state.layout.name or "Optimized Layout",
+            callback=log_callback,
+        )
+        
+        if result.success:
+            st.session_state.layout = result.layout
+            st.session_state.optimization_log.append(
+                f"✅ Optimization complete! {result.space_count} spaces, "
+                f"€{result.estimated_revenue:,.0f}/year estimated revenue"
+            )
+            st.session_state.optimization_log.append(
+                f"⏱️ Solved in {result.solve_time:.1f}s (status: {result.status})"
+            )
+        else:
+            st.session_state.optimization_log.append(
+                f"❌ Optimization failed: {result.status}"
+            )
+            for warning in result.warnings:
+                st.session_state.optimization_log.append(f"⚠️ {warning}")
+                
+    except ImportError as e:
+        st.session_state.optimization_log.append(
+            f"❌ Missing dependency: {e}. Install with: pip install shapely ortools"
+        )
+    except Exception as e:
+        st.session_state.optimization_log.append(f"❌ Error: {e}")
+
+
+def render_auto_generate_panel():
+    """Render the auto-generate panel in the main content area."""
+    with st.expander("🤖 **Auto-Generate Layout** - Create optimized layout from boundary", expanded=False):
+        st.markdown("""
+        Define your lot boundary and let the optimizer automatically place parking spaces 
+        and lanes for maximum efficiency.
+        """)
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("#### 📐 Boundary Definition")
+            
+            input_method = st.radio(
+                "Input Method",
+                options=["Preset Shapes", "Manual Coordinates", "Upload GeoJSON"],
+                horizontal=True,
+            )
+            
+            boundary = None
+            entry_point = None
+            exit_point = None
+            
+            if input_method == "Preset Shapes":
+                preset = st.selectbox(
+                    "Select Preset",
+                    options=list(PRESET_BOUNDARIES.keys()),
+                    key="main_preset"
+                )
+                preset_data = PRESET_BOUNDARIES[preset]
+                boundary = preset_data["boundary"]
+                entry_point = preset_data["entry"]
+                exit_point = preset_data["exit"]
+                
+                st.caption(f"📍 {preset_data['description']}")
+                st.caption(f"Entry: {entry_point}, Exit: {exit_point}")
+                
+            elif input_method == "Manual Coordinates":
+                st.markdown("Enter corner points (x, y) separated by semicolons:")
+                coords_input = st.text_area(
+                    "Boundary Points",
+                    value="0,0; 27,0; 74,145; 0,145",
+                    help="Format: x1,y1; x2,y2; x3,y3; ..."
+                )
+                
+                try:
+                    points = []
+                    for part in coords_input.split(";"):
+                        x, y = map(float, part.strip().split(","))
+                        points.append((x, y))
+                    boundary = points
+                    st.success(f"✅ Parsed {len(boundary)} points")
+                except:
+                    st.error("Invalid format. Use: x1,y1; x2,y2; ...")
+                
+                # Entry/exit points
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    entry_x = st.number_input("Entry X", value=13.0, key="entry_x")
+                    entry_y = st.number_input("Entry Y", value=0.0, key="entry_y")
+                    entry_point = (entry_x, entry_y)
+                with col_e2:
+                    exit_x = st.number_input("Exit X", value=37.0, key="exit_x")
+                    exit_y = st.number_input("Exit Y", value=145.0, key="exit_y")
+                    exit_point = (exit_x, exit_y)
+                    
+            elif input_method == "Upload GeoJSON":
+                uploaded_geojson = st.file_uploader("Upload GeoJSON", type=["json", "geojson"])
+                if uploaded_geojson:
+                    try:
+                        geojson = json.load(uploaded_geojson)
+                        # Extract coordinates from GeoJSON
+                        if geojson.get("type") == "Feature":
+                            coords = geojson["geometry"]["coordinates"][0]
+                        elif geojson.get("type") == "Polygon":
+                            coords = geojson["coordinates"][0]
+                        else:
+                            coords = geojson.get("coordinates", [[]])[0]
+                        
+                        boundary = [(c[0], c[1]) for c in coords]
+                        st.success(f"✅ Loaded {len(boundary)} points from GeoJSON")
+                        
+                        # Default entry/exit at first and middle points
+                        entry_point = boundary[0]
+                        exit_point = boundary[len(boundary) // 2]
+                    except Exception as e:
+                        st.error(f"Error parsing GeoJSON: {e}")
+                else:
+                    st.info("Upload a GeoJSON file with a Polygon geometry")
+                    
+                # Entry/exit override
+                if boundary:
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        entry_x = st.number_input("Entry X", value=entry_point[0] if entry_point else 0.0, key="geo_entry_x")
+                        entry_y = st.number_input("Entry Y", value=entry_point[1] if entry_point else 0.0, key="geo_entry_y")
+                        entry_point = (entry_x, entry_y)
+                    with col_e2:
+                        exit_x = st.number_input("Exit X", value=exit_point[0] if exit_point else 0.0, key="geo_exit_x")
+                        exit_y = st.number_input("Exit Y", value=exit_point[1] if exit_point else 0.0, key="geo_exit_y")
+                        exit_point = (exit_x, exit_y)
+        
+        with col2:
+            st.markdown("#### ⚙️ Optimization Settings")
+            
+            optimization_goal = st.selectbox(
+                "Optimization Goal",
+                options=[
+                    ("maximize_revenue", "💰 Maximize Revenue"),
+                    ("maximize_count", "📊 Maximize Space Count"),
+                    ("maximize_trucks", "🚛 Prioritize Large Trucks"),
+                ],
+                format_func=lambda x: x[1],
+                key="opt_goal"
+            )[0]
+            
+            lane_type = st.radio(
+                "Lane Type",
+                options=["oneway", "twoway"],
+                format_func=lambda x: "One-Way (6m)" if x == "oneway" else "Two-Way (8m)",
+                horizontal=True,
+            )
+            
+            time_limit = st.slider(
+                "Time Limit (seconds)",
+                min_value=5,
+                max_value=60,
+                value=30,
+                step=5,
+            )
+            
+            st.markdown("#### 🚛 Vehicle Mix (Optional)")
+            
+            use_vehicle_mix = st.checkbox("Specify vehicle mix limits")
+            vehicle_mix = None
+            
+            if use_vehicle_mix:
+                vehicle_mix = {}
+                mix_cols = st.columns(3)
+                
+                types_info = [
+                    ("truck", "Trucks"),
+                    ("ev", "EV"),
+                    ("tractor", "Tractors"),
+                    ("trailer", "Trailers"),
+                    ("van", "Vans"),
+                ]
+                
+                for i, (vtype, label) in enumerate(types_info):
+                    with mix_cols[i % 3]:
+                        min_v = st.number_input(f"Min {label}", min_value=0, value=0, key=f"min_{vtype}")
+                        max_v = st.number_input(f"Max {label}", min_value=0, value=100, key=f"max_{vtype}")
+                        vehicle_mix[vtype] = (min_v, max_v)
+        
+        st.markdown("---")
+        
+        # Quick estimate
+        if boundary:
+            try:
+                from src.optimizer import quick_estimate
+                estimate = quick_estimate(boundary, lane_type)
+                
+                est_cols = st.columns(4)
+                with est_cols[0]:
+                    st.metric("Total Area", f"{estimate['total_area']:,.0f} m²")
+                with est_cols[1]:
+                    st.metric("Parking Area", f"{estimate['estimated_parking_area']:,.0f} m²")
+                with est_cols[2]:
+                    st.metric("Est. Max Trucks", estimate['max_truck_spaces'])
+                with est_cols[3]:
+                    st.metric("Est. Revenue", f"€{estimate['estimated_annual_revenue']:,.0f}/yr")
+            except:
+                pass
+        
+        # Generate button
+        col_btn1, col_btn2 = st.columns([2, 1])
+        with col_btn1:
+            generate_clicked = st.button(
+                "🚀 Generate Optimized Layout",
+                type="primary",
+                use_container_width=True,
+                disabled=(boundary is None),
+            )
+        with col_btn2:
+            if st.button("🗑️ Clear Current", use_container_width=True):
+                st.session_state.layout.spaces = []
+                st.session_state.layout.lanes = []
+                st.rerun()
+        
+        if generate_clicked and boundary:
+            with st.spinner("Optimizing layout... This may take up to 30 seconds."):
+                run_optimization(
+                    boundary=boundary,
+                    entry_point=entry_point,
+                    exit_point=exit_point,
+                    optimization_goal=optimization_goal,
+                    lane_type=lane_type,
+                    time_limit=float(time_limit),
+                    vehicle_mix=vehicle_mix if use_vehicle_mix else None,
+                )
+            st.rerun()
+        
+        # Show optimization log
+        if st.session_state.optimization_log:
+            st.markdown("#### 📝 Optimization Log")
+            log_text = "\n".join(st.session_state.optimization_log)
+            st.code(log_text, language=None)
+
+
 def render_main_canvas():
     """Render the main layout canvas."""
     layout = st.session_state.layout
@@ -238,7 +602,7 @@ def render_space_list(compliance: ComplianceReport):
     layout = st.session_state.layout
     
     if not layout.spaces:
-        st.info("No parking spaces yet. Add some using the sidebar!")
+        st.info("No parking spaces yet. Use Auto-Generate or add manually!")
         return
     
     # Group by type
@@ -449,6 +813,9 @@ def main():
     # Main content area
     st.title("🚛 TruckParking Layout Optimizer")
     st.markdown(f"*Location: Havenweg 4, Echt • Target: €{SITE['revenue_target']:,}/year*")
+    
+    # Auto-generate panel (collapsible)
+    render_auto_generate_panel()
     
     # Summary stats at top
     render_summary_stats()
