@@ -936,26 +936,50 @@ def render_space_list(compliance: ComplianceReport):
             st.rerun()
 
     st.markdown("#### Quick Rotate")
-    rot_col1, rot_col2, rot_col3, rot_col4 = st.columns([2, 1, 1, 1])
+    rot_col1, rot_col2 = st.columns([2, 1])
     with rot_col1:
-        rotate_ids = st.multiselect("IDs", options=[s.id for s in layout.spaces], default=[])
+        rotate_ids = st.multiselect(
+            "IDs",
+            options=[s.id for s in layout.spaces],
+            default=[],
+            help="Select one or more spaces to rotate.",
+        )
     with rot_col2:
-        rotate_step = st.segmented_control("Step", [15, 30, 45], default=15, key="rotate_step")
-    with rot_col3:
-        rotate_left = st.button("Rotate -", use_container_width=True)
-    with rot_col4:
-        rotate_right = st.button("Rotate +", use_container_width=True)
+        rotate_step = st.number_input(
+            "Degrees",
+            min_value=1,
+            max_value=359,
+            value=15,
+            step=1,
+            help="Use any rotation increment, not only presets.",
+        )
+
+    rot_actions = st.columns([1, 1, 1])
+    with rot_actions[0]:
+        rotate_left = st.button("Rotate Left", use_container_width=True)
+    with rot_actions[1]:
+        rotate_right = st.button("Rotate Right", use_container_width=True)
+    with rot_actions[2]:
+        set_absolute = st.button("Set Absolute", use_container_width=True)
+
     if rotate_left and rotate_ids:
         for sid in rotate_ids:
             sp = layout.get_space_by_id(int(sid))
             if sp:
-                rotate_space(sp, -int(rotate_step or 15))
+                rotate_space(sp, -int(rotate_step))
         st.rerun()
     if rotate_right and rotate_ids:
         for sid in rotate_ids:
             sp = layout.get_space_by_id(int(sid))
             if sp:
-                rotate_space(sp, int(rotate_step or 15))
+                rotate_space(sp, int(rotate_step))
+        st.rerun()
+    if set_absolute and rotate_ids:
+        absolute_deg = int(rotate_step) % 360
+        for sid in rotate_ids:
+            sp = layout.get_space_by_id(int(sid))
+            if sp:
+                sp.rotation = float(absolute_deg)
         st.rerun()
 
 
@@ -1160,16 +1184,13 @@ def main():
     col1, col2 = st.columns([1.9, 1.1])
 
     with col1:
-        main_tabs = st.tabs(["Parking Spaces", "Layout Canvas"])
-        with main_tabs[0]:
-            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
-            render_space_list(compliance)
-            render_space_editor()
-            st.markdown("</div>", unsafe_allow_html=True)
-        with main_tabs[1]:
-            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
-            render_main_canvas(compliance)
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+        render_main_canvas(compliance)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+        render_space_list(compliance)
+        render_space_editor()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
         right_tabs = st.tabs(["Compliance & Revenue", "Scenarios"])
