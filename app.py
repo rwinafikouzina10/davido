@@ -34,7 +34,7 @@ st.markdown("""
         --tp-bg-top: #f8fbff;
         --tp-bg-bottom: #edf2f7;
         --tp-ink: #0f172a;
-        --tp-muted: #64748b;
+        --tp-muted: #475569;
         --tp-border: #d9e2ee;
         --tp-card: #ffffff;
         --tp-primary: #0ea5e9;
@@ -66,6 +66,12 @@ st.markdown("""
     p, li, label, .stMarkdown, .stCaption, [data-testid="stWidgetLabel"] {
         font-family: 'Manrope', 'Segoe UI', sans-serif !important;
     }
+    .stMarkdown, .stMarkdown p, .stCaption, [data-testid="stWidgetLabel"] {
+        color: var(--tp-ink) !important;
+    }
+    .stCaption {
+        color: #334155 !important;
+    }
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, var(--tp-sidebar-top) 0%, var(--tp-sidebar-bottom) 100%);
         border-right: 1px solid rgba(255, 255, 255, 0.14);
@@ -96,7 +102,7 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
     }
     [data-testid="stMetricLabel"] {
-        color: var(--tp-muted) !important;
+        color: #334155 !important;
         font-weight: 700 !important;
     }
     [data-testid="stMetricValue"] {
@@ -129,12 +135,31 @@ st.markdown("""
     [data-testid="stTabs"] button[role="tab"] {
         border-radius: 10px 10px 0 0;
         font-weight: 700;
+        color: #334155;
+    }
+    [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        color: #0f172a !important;
     }
     [data-testid="stDataEditor"] {
         border-radius: 12px;
         border: 1px solid var(--tp-border);
         overflow: hidden;
         background: #fff;
+    }
+    [data-testid="stDataEditor"] * {
+        color: #0f172a !important;
+    }
+    [data-baseweb="input"] input,
+    [data-baseweb="textarea"] textarea,
+    [data-baseweb="select"] div {
+        color: #0f172a !important;
+    }
+    div[data-testid="stExpander"] summary,
+    div[data-testid="stExpander"] summary * {
+        color: #0f172a !important;
+    }
+    [data-testid="stAlertContainer"] * {
+        color: #0f172a !important;
     }
 </style>
 """, unsafe_allow_html=True)
