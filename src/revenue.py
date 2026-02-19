@@ -24,11 +24,11 @@ class RevenueProjection:
     @property
     def status(self) -> str:
         if self.target_percentage >= 100:
-            return f"✅ Exceeds target by {self.target_percentage - 100:.1f}%"
+            return f"Exceeds target by {self.target_percentage - 100:.1f}%"
         elif self.target_percentage >= 90:
-            return f"⚠️ {100 - self.target_percentage:.1f}% below target"
+            return f"{100 - self.target_percentage:.1f}% below target"
         else:
-            return f"❌ {100 - self.target_percentage:.1f}% below target"
+            return f"{100 - self.target_percentage:.1f}% below target"
 
 
 def calculate_revenue(layout: Layout, occupancy_rate: float = 0.75) -> RevenueProjection:

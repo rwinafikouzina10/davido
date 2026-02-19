@@ -16,6 +16,7 @@ from src.optimizer import (
     OptimizationGoal,
     Candidate,
     calculate_space_revenue,
+    validate_vehicle_mix,
 )
 from src.lane_generator import (
     generate_lanes,
@@ -207,6 +208,30 @@ class TestOptimizationConfig:
         assert config.time_limit == 10.0
         assert config.goal == OptimizationGoal.MAXIMIZE_COUNT
         assert "truck" in config.vehicle_mix
+
+
+class TestVehicleMixValidation:
+    """Tests for vehicle mix validation and constraints."""
+
+    def test_invalid_vehicle_mix_min_gt_max(self):
+        errors = validate_vehicle_mix({"truck": (5, 3)})
+        assert errors
+        assert any("min > max" in e for e in errors)
+
+    def test_invalid_vehicle_mix_unknown_type(self):
+        errors = validate_vehicle_mix({"bus": (1, 2)})
+        assert errors
+        assert any("Unknown vehicle type" in e for e in errors)
+
+    def test_optimize_layout_rejects_invalid_mix(self):
+        result = optimize_layout(
+            boundary=[(0, 0), (40, 0), (40, 40), (0, 40)],
+            entry_point=(20, 0),
+            exit_point=(20, 40),
+            vehicle_mix={"truck": (5, 3)},
+            time_limit=2.0,
+        )
+        assert result.status == "invalid"
 
 
 class TestRevenueCalculation:

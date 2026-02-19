@@ -107,6 +107,27 @@ class OptimizationResult:
         return self.stats.get("total_revenue", 0.0)
 
 
+def validate_vehicle_mix(vehicle_mix: Optional[Dict[str, Tuple[int, int]]]) -> List[str]:
+    """Validate vehicle mix constraints and return validation errors."""
+    if not vehicle_mix:
+        return []
+
+    errors = []
+    valid_types = set(SPACE_TYPES.keys())
+
+    for space_type, limits in vehicle_mix.items():
+        if space_type not in valid_types:
+            errors.append(f"Unknown vehicle type in mix: {space_type}")
+            continue
+        min_count, max_count = limits
+        if min_count < 0 or max_count < 0:
+            errors.append(f"Vehicle mix for {space_type} cannot be negative")
+        if min_count > max_count:
+            errors.append(f"Vehicle mix for {space_type} has min > max ({min_count} > {max_count})")
+
+    return errors
+
+
 def calculate_space_revenue(space_type: str, occupancy: float = 0.75) -> float:
     """
     Calculate annual revenue for a space type.
@@ -290,6 +311,8 @@ def solve_with_ortools(
     if config.vehicle_mix:
         for space_type, (min_count, max_count) in config.vehicle_mix.items():
             type_vars = [selected[i] for i, c in enumerate(candidates) if c.type == space_type]
+            if min_count > 0 and not type_vars:
+                return [], "infeasible"
             if type_vars:
                 if min_count > 0:
                     model.Add(sum(type_vars) >= min_count)
@@ -313,7 +336,7 @@ def solve_with_ortools(
     # Solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = config.time_limit
-    solver.parameters.num_search_workers = 4  # Parallel solving
+    solver.parameters.num_search_workers = 1
     
     # Add callback for progress updates
     class SolutionCallback(cp_model.CpSolverSolutionCallback):
@@ -409,7 +432,16 @@ def solve_greedy(
         # Exclude conflicting candidates
         for j in conflict_map.get(i, []):
             excluded.add(j)
-    
+
+    # Validate minimum mix requirements in fallback mode
+    if config.vehicle_mix:
+        counts = {}
+        for idx in selected:
+            counts[candidates[idx].type] = counts.get(candidates[idx].type, 0) + 1
+        for space_type, (min_count, _) in config.vehicle_mix.items():
+            if counts.get(space_type, 0) < min_count:
+                return [], "infeasible"
+
     return selected, "feasible"
 
 
@@ -442,6 +474,20 @@ def optimize_layout(
         OptimizationResult with generated layout
     """
     start_time = time.time()
+
+    if not boundary or len(boundary) < 3:
+        raise ValueError("Boundary must contain at least 3 coordinate points")
+    if entry_point is None or len(entry_point) != 2:
+        raise ValueError("Entry point must be a valid (x, y) tuple")
+
+    mix_errors = validate_vehicle_mix(vehicle_mix)
+    if mix_errors:
+        return OptimizationResult(
+            layout=Layout(name=layout_name),
+            status="invalid",
+            warnings=mix_errors,
+            solve_time=0.0,
+        )
     
     # Convert goal string to enum
     goal_map = {

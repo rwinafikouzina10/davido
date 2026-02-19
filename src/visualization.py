@@ -2,9 +2,11 @@
 
 import plotly.graph_objects as go
 from typing import List, Optional
+from shapely.geometry import Polygon
 from .models import Layout, ParkingSpace
-from .config import COLORS, SPACE_TYPES, DEFAULT_BOUNDARY
+from .config import COLORS, SPACE_TYPES, DEFAULT_BOUNDARY, SITE
 from .compliance import ComplianceReport
+from .geometry import Rectangle, line_to_lane_polygon
 
 
 def create_layout_figure(
@@ -62,24 +64,31 @@ def create_layout_figure(
             border_width = 1
             opacity = 0.8
         
-        # Create rectangle for the space
-        x0, y0 = space.x, space.y
-        x1, y1 = space.x + space.length, space.y + space.width
-        
-        fig.add_shape(
-            type="rect",
-            x0=x0, y0=y0, x1=x1, y1=y1,
+        # Render rotated geometry accurately.
+        space_poly = Rectangle(space.x, space.y, space.length, space.width, space.rotation).to_polygon()
+        coords = list(space_poly.exterior.coords)
+        xs = [c[0] for c in coords]
+        ys = [c[1] for c in coords]
+
+        fig.add_trace(go.Scatter(
+            x=xs,
+            y=ys,
+            mode="lines",
+            line=dict(color=border_color, width=border_width),
+            fill="toself",
             fillcolor=color,
             opacity=opacity,
-            line=dict(color=border_color, width=border_width),
             name=space.label,
-        )
+            showlegend=False,
+            hoverinfo="skip",
+        ))
         
         # Add label
         if show_labels:
+            center = space_poly.centroid
             fig.add_annotation(
-                x=(x0 + x1) / 2,
-                y=(y0 + y1) / 2,
+                x=center.x,
+                y=center.y,
                 text=space.label,
                 showarrow=False,
                 font=dict(size=10, color="white"),
@@ -89,29 +98,37 @@ def create_layout_figure(
     for lane in layout.lanes:
         path = lane.path
         if len(path) >= 2:
-            lane_x = [p[0] for p in path]
-            lane_y = [p[1] for p in path]
-            
-            fig.add_trace(go.Scatter(
-                x=lane_x,
-                y=lane_y,
-                mode="lines",
-                name=f"Lane: {lane.id}",
-                line=dict(color=COLORS["lane"], width=lane.width, dash="dot"),
-            ))
+            lane_poly = line_to_lane_polygon(path, lane.width)
+            if not lane_poly.is_empty:
+                lane_coords = list(lane_poly.exterior.coords)
+                fig.add_trace(go.Scatter(
+                    x=[p[0] for p in lane_coords],
+                    y=[p[1] for p in lane_coords],
+                    mode="lines",
+                    name=f"Lane: {lane.id}",
+                    line=dict(color=COLORS["lane"], width=1),
+                    fill="toself",
+                    fillcolor="rgba(149, 165, 166, 0.5)",
+                    showlegend=False,
+                ))
+
+    boundary_poly = Polygon(boundary)
+    min_x, min_y, max_x, max_y = boundary_poly.bounds
+    pad_x = max(5, (max_x - min_x) * 0.05)
+    pad_y = max(5, (max_y - min_y) * 0.05)
     
     # Configure layout
     fig.update_layout(
-        title=dict(text=f"🚛 {layout.name}", font=dict(size=18)),
+        title=dict(text=layout.name, font=dict(size=18)),
         xaxis=dict(
             title="Width (m)",
             scaleanchor="y",
             scaleratio=1,
-            range=[-5, layout.lot_width + 5],
+            range=[min_x - pad_x, max_x + pad_x],
         ),
         yaxis=dict(
             title="Length (m)",
-            range=[-5, layout.lot_length + 5],
+            range=[min_y - pad_y, max_y + pad_y],
         ),
         width=width,
         height=height,
@@ -182,16 +199,6 @@ def create_revenue_chart(revenue_projection, layout) -> go.Figure:
         )
     ])
     
-    # Add target line
-    target_per_type = revenue_projection.target / len(types) if types else 0
-    fig.add_hline(
-        y=target_per_type,
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Target avg: €{target_per_type:,.0f}",
-        annotation_position="top right",
-    )
-    
     fig.update_layout(
         title="Annual Revenue by Space Type",
         xaxis_title="Space Type",
@@ -221,15 +228,13 @@ def create_scenario_comparison_chart(comparison_data: list) -> go.Figure:
         textposition="outside",
     ))
     
-    # Target line
-    if comparison_data:
-        target = comparison_data[0].get("annual_revenue", 0) / (comparison_data[0].get("target_pct", 100) / 100)
-        fig.add_hline(
-            y=200000,  # Revenue target
-            line_dash="dash",
-            line_color="red",
-            annotation_text="Target: €200,000",
-        )
+    target = SITE.get("revenue_target", 200000)
+    fig.add_hline(
+        y=target,
+        line_dash="dash",
+        line_color="red",
+        annotation_text=f"Target: EUR {target:,.0f}",
+    )
     
     fig.update_layout(
         title="Scenario Revenue Comparison",

@@ -5,8 +5,6 @@ A tool for optimizing truck parking lot layouts.
 
 import streamlit as st
 import json
-from pathlib import Path
-from datetime import datetime
 
 # Local imports
 from src.models import Layout, ParkingSpace, Scenario
@@ -22,7 +20,7 @@ from src.config import SPACE_TYPES, SITE, LAYOUTS_DIR
 # Page config
 st.set_page_config(
     page_title="TruckParking Optimizer",
-    page_icon="🚛",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -30,32 +28,47 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    .block-container {
+        padding-top: 1.25rem;
+        padding-bottom: 2rem;
+        max-width: 1300px;
+    }
+    .stApp {
+        background:
+            radial-gradient(1200px 600px at -10% -20%, rgba(14, 165, 233, 0.12), transparent 60%),
+            radial-gradient(1000px 520px at 110% 5%, rgba(16, 185, 129, 0.1), transparent 60%),
+            linear-gradient(180deg, #0b1220 0%, #101827 100%);
+        color: #e5e7eb;
+    }
+    h1, h2, h3 {
+        color: #f8fafc !important;
+        letter-spacing: 0.01em;
+    }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+        border-right: 1px solid rgba(148, 163, 184, 0.15);
+    }
     [data-testid="stMetric"] {
-        background-color: #262730;
+        background-color: rgba(15, 23, 42, 0.92);
         padding: 15px;
-        border-radius: 8px;
-        border: 1px solid #3d3d3d;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
     }
     [data-testid="stMetricLabel"] {
-        color: #a0a0a0 !important;
+        color: #cbd5e1 !important;
     }
     [data-testid="stMetricValue"] {
-        color: #ffffff !important;
+        color: #f8fafc !important;
         font-size: 2rem !important;
     }
-    .status-valid { color: #27ae60; font-weight: bold; }
-    .status-warning { color: #f39c12; font-weight: bold; }
-    .status-error { color: #e74c3c; font-weight: bold; }
     div[data-testid="stExpander"] {
-        background-color: #1e1e1e;
-        border-radius: 5px;
+        background-color: rgba(2, 6, 23, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 10px;
     }
-    .optimization-progress {
-        padding: 10px;
-        background-color: #1a1a2e;
-        border-radius: 5px;
-        font-family: monospace;
-        font-size: 12px;
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -96,6 +109,47 @@ PRESET_BOUNDARIES = {
 }
 
 
+def parse_manual_boundary(coords_input: str):
+    """Parse semicolon-separated x,y pairs into a boundary list."""
+    points = []
+    for part in coords_input.split(";"):
+        raw = part.strip()
+        if not raw:
+            continue
+        chunks = [c.strip() for c in raw.split(",")]
+        if len(chunks) != 2:
+            raise ValueError(f"Invalid point format: '{raw}'")
+        points.append((float(chunks[0]), float(chunks[1])))
+    if len(points) < 3:
+        raise ValueError("At least 3 points are required to define a polygon")
+    return points
+
+
+def extract_polygon_coords(geojson_obj):
+    """Extract polygon coordinates from GeoJSON object."""
+    obj_type = geojson_obj.get("type")
+
+    if obj_type == "FeatureCollection":
+        features = geojson_obj.get("features", [])
+        for feature in features:
+            geom = feature.get("geometry", {})
+            coords = extract_polygon_coords(geom)
+            if coords:
+                return coords
+        raise ValueError("No Polygon geometry found in FeatureCollection")
+
+    if obj_type == "Feature":
+        return extract_polygon_coords(geojson_obj.get("geometry", {}))
+
+    if obj_type == "Polygon":
+        rings = geojson_obj.get("coordinates", [])
+        if not rings or len(rings[0]) < 3:
+            raise ValueError("Polygon coordinates are missing or invalid")
+        return [(float(c[0]), float(c[1])) for c in rings[0]]
+
+    raise ValueError(f"Unsupported GeoJSON type: {obj_type}")
+
+
 def init_session_state():
     """Initialize session state variables."""
     if "layout" not in st.session_state:
@@ -126,7 +180,7 @@ def init_session_state():
 def render_sidebar():
     """Render the sidebar with controls."""
     with st.sidebar:
-        st.title("🚛 TruckParking Optimizer")
+        st.title("TruckParking Optimizer")
         st.markdown("---")
         
         # Layout name
@@ -136,7 +190,7 @@ def render_sidebar():
         )
         
         # Tabs for different operations
-        tab1, tab2, tab3, tab4 = st.tabs(["🤖 Auto", "➕ Add", "📂 Load/Save", "⚙️ Settings"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Auto", "Add", "Load/Save", "Settings"])
         
         with tab1:
             render_auto_generate_sidebar()
@@ -153,9 +207,9 @@ def render_sidebar():
 
 def render_auto_generate_sidebar():
     """Render the auto-generate controls in sidebar."""
-    st.subheader("🤖 Auto-Generate Layout")
+    st.subheader("Auto-Generate Layout")
     
-    st.info("💡 Use the Auto-Generate panel in the main area for full controls, or quick-generate here.")
+    st.info("Use the Auto-Generate panel in the main area for full controls, or quick-generate here.")
     
     # Quick preset selection
     preset = st.selectbox(
@@ -181,7 +235,7 @@ def render_auto_generate_sidebar():
         "Prioritize Trucks": "maximize_trucks",
     }
     
-    if st.button("⚡ Quick Generate", type="primary", use_container_width=True):
+    if st.button("Quick Generate", type="primary", use_container_width=True):
         run_optimization(
             boundary=preset_data["boundary"],
             entry_point=preset_data["entry"],
@@ -205,17 +259,22 @@ def render_add_space_form():
     
     specs = SPACE_TYPES[space_type]
     
+    boundary_x = [p[0] for p in st.session_state.layout.boundary] if st.session_state.layout.boundary else [0, st.session_state.layout.lot_width]
+    boundary_y = [p[1] for p in st.session_state.layout.boundary] if st.session_state.layout.boundary else [0, st.session_state.layout.lot_length]
+    max_x = max(boundary_x)
+    max_y = max(boundary_y)
+
     col1, col2 = st.columns(2)
     with col1:
-        x = st.number_input("X Position (m)", min_value=0.0, max_value=100.0, value=5.0, step=1.0)
+        x = st.number_input("X Position (m)", min_value=0.0, max_value=float(max_x), value=5.0, step=1.0)
         length = st.number_input("Length (m)", min_value=1.0, max_value=30.0, value=specs["default_length"], step=0.5)
     with col2:
-        y = st.number_input("Y Position (m)", min_value=0.0, max_value=200.0, value=5.0, step=1.0)
+        y = st.number_input("Y Position (m)", min_value=0.0, max_value=float(max_y), value=5.0, step=1.0)
         width = st.number_input("Width (m)", min_value=1.0, max_value=10.0, value=specs["default_width"], step=0.5)
     
     rotation = st.slider("Rotation (°)", min_value=0, max_value=90, value=0, step=15)
     
-    if st.button("➕ Add Space", type="primary", use_container_width=True):
+    if st.button("Add Space", type="primary", use_container_width=True):
         new_id = st.session_state.layout.get_next_id()
         new_space = ParkingSpace(
             id=new_id,
@@ -236,17 +295,17 @@ def render_load_save():
     st.subheader("Data Management")
     
     # Export to JSON
-    if st.button("📥 Export Layout (JSON)", use_container_width=True):
-        json_str = st.session_state.layout.to_json()
-        st.download_button(
-            label="Download JSON",
-            data=json_str,
-            file_name=f"{st.session_state.layout.name.replace(' ', '_')}.json",
-            mime="application/json",
-        )
+    json_str = st.session_state.layout.to_json()
+    st.download_button(
+        label="Export Layout (JSON)",
+        data=json_str,
+        file_name=f"{st.session_state.layout.name.replace(' ', '_')}.json",
+        mime="application/json",
+        use_container_width=True,
+    )
     
     # Import from JSON
-    uploaded_file = st.file_uploader("📤 Import Layout", type=["json"])
+    uploaded_file = st.file_uploader("Import Layout", type=["json"])
     if uploaded_file is not None:
         try:
             data = json.load(uploaded_file)
@@ -262,7 +321,7 @@ def render_load_save():
     st.subheader("Scenarios")
     scenario_name = st.text_input("Scenario Name", value=f"Scenario {len(st.session_state.scenarios) + 1}")
     
-    if st.button("💾 Save as Scenario", use_container_width=True):
+    if st.button("Save as Scenario", use_container_width=True):
         scenario = Scenario(
             name=scenario_name,
             layout=Layout.from_dict(st.session_state.layout.to_dict()),  # Deep copy
@@ -277,7 +336,7 @@ def render_load_save():
         for i, scenario in enumerate(st.session_state.scenarios):
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.text(f"📋 {scenario.name}")
+                st.text(scenario.name)
             with col2:
                 if st.button("Load", key=f"load_{i}"):
                     st.session_state.layout = Layout.from_dict(scenario.layout.to_dict())
@@ -308,7 +367,7 @@ def render_settings():
     st.markdown("---")
     
     # Clear all spaces
-    if st.button("🗑️ Clear All Spaces", use_container_width=True):
+    if st.button("Clear All Spaces", use_container_width=True):
         st.session_state.layout.spaces = []
         st.rerun()
 
@@ -346,30 +405,30 @@ def run_optimization(
         if result.success:
             st.session_state.layout = result.layout
             st.session_state.optimization_log.append(
-                f"✅ Optimization complete! {result.space_count} spaces, "
-                f"€{result.estimated_revenue:,.0f}/year estimated revenue"
+                f"Optimization complete: {result.space_count} spaces, "
+                f"EUR {result.estimated_revenue:,.0f}/year estimated revenue"
             )
             st.session_state.optimization_log.append(
-                f"⏱️ Solved in {result.solve_time:.1f}s (status: {result.status})"
+                f"Solved in {result.solve_time:.1f}s (status: {result.status})"
             )
         else:
             st.session_state.optimization_log.append(
-                f"❌ Optimization failed: {result.status}"
+                f"Optimization failed: {result.status}"
             )
             for warning in result.warnings:
-                st.session_state.optimization_log.append(f"⚠️ {warning}")
+                st.session_state.optimization_log.append(f"Warning: {warning}")
                 
     except ImportError as e:
         st.session_state.optimization_log.append(
-            f"❌ Missing dependency: {e}. Install with: pip install shapely ortools"
+            f"Missing dependency: {e}. Install with: pip install shapely ortools"
         )
     except Exception as e:
-        st.session_state.optimization_log.append(f"❌ Error: {e}")
+        st.session_state.optimization_log.append(f"Error: {e}")
 
 
 def render_auto_generate_panel():
     """Render the auto-generate panel in the main content area."""
-    with st.expander("🤖 **Auto-Generate Layout** - Create optimized layout from boundary", expanded=False):
+    with st.expander("Auto-Generate Layout - Create optimized layout from boundary", expanded=False):
         st.markdown("""
         Define your lot boundary and let the optimizer automatically place parking spaces 
         and lanes for maximum efficiency.
@@ -378,7 +437,7 @@ def render_auto_generate_panel():
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            st.markdown("#### 📐 Boundary Definition")
+            st.markdown("#### Boundary Definition")
             
             input_method = st.radio(
                 "Input Method",
@@ -401,7 +460,7 @@ def render_auto_generate_panel():
                 entry_point = preset_data["entry"]
                 exit_point = preset_data["exit"]
                 
-                st.caption(f"📍 {preset_data['description']}")
+                st.caption(preset_data["description"])
                 st.caption(f"Entry: {entry_point}, Exit: {exit_point}")
                 
             elif input_method == "Manual Coordinates":
@@ -413,14 +472,10 @@ def render_auto_generate_panel():
                 )
                 
                 try:
-                    points = []
-                    for part in coords_input.split(";"):
-                        x, y = map(float, part.strip().split(","))
-                        points.append((x, y))
-                    boundary = points
-                    st.success(f"✅ Parsed {len(boundary)} points")
-                except:
-                    st.error("Invalid format. Use: x1,y1; x2,y2; ...")
+                    boundary = parse_manual_boundary(coords_input)
+                    st.success(f"Parsed {len(boundary)} points")
+                except ValueError as exc:
+                    st.error(str(exc))
                 
                 # Entry/exit points
                 col_e1, col_e2 = st.columns(2)
@@ -438,16 +493,8 @@ def render_auto_generate_panel():
                 if uploaded_geojson:
                     try:
                         geojson = json.load(uploaded_geojson)
-                        # Extract coordinates from GeoJSON
-                        if geojson.get("type") == "Feature":
-                            coords = geojson["geometry"]["coordinates"][0]
-                        elif geojson.get("type") == "Polygon":
-                            coords = geojson["coordinates"][0]
-                        else:
-                            coords = geojson.get("coordinates", [[]])[0]
-                        
-                        boundary = [(c[0], c[1]) for c in coords]
-                        st.success(f"✅ Loaded {len(boundary)} points from GeoJSON")
+                        boundary = extract_polygon_coords(geojson)
+                        st.success(f"Loaded {len(boundary)} points from GeoJSON")
                         
                         # Default entry/exit at first and middle points
                         entry_point = boundary[0]
@@ -470,14 +517,14 @@ def render_auto_generate_panel():
                         exit_point = (exit_x, exit_y)
         
         with col2:
-            st.markdown("#### ⚙️ Optimization Settings")
+            st.markdown("#### Optimization Settings")
             
             optimization_goal = st.selectbox(
                 "Optimization Goal",
                 options=[
-                    ("maximize_revenue", "💰 Maximize Revenue"),
-                    ("maximize_count", "📊 Maximize Space Count"),
-                    ("maximize_trucks", "🚛 Prioritize Large Trucks"),
+                    ("maximize_revenue", "Maximize Revenue"),
+                    ("maximize_count", "Maximize Space Count"),
+                    ("maximize_trucks", "Prioritize Large Trucks"),
                 ],
                 format_func=lambda x: x[1],
                 key="opt_goal"
@@ -498,10 +545,11 @@ def render_auto_generate_panel():
                 step=5,
             )
             
-            st.markdown("#### 🚛 Vehicle Mix (Optional)")
+            st.markdown("#### Vehicle Mix (Optional)")
             
             use_vehicle_mix = st.checkbox("Specify vehicle mix limits")
             vehicle_mix = None
+            invalid_vehicle_mix = False
             
             if use_vehicle_mix:
                 vehicle_mix = {}
@@ -520,6 +568,9 @@ def render_auto_generate_panel():
                         min_v = st.number_input(f"Min {label}", min_value=0, value=0, key=f"min_{vtype}")
                         max_v = st.number_input(f"Max {label}", min_value=0, value=100, key=f"max_{vtype}")
                         vehicle_mix[vtype] = (min_v, max_v)
+                        if min_v > max_v:
+                            invalid_vehicle_mix = True
+                            st.error(f"Invalid limits for {label}: min cannot exceed max")
         
         st.markdown("---")
         
@@ -537,7 +588,7 @@ def render_auto_generate_panel():
                 with est_cols[2]:
                     st.metric("Est. Max Trucks", estimate['max_truck_spaces'])
                 with est_cols[3]:
-                    st.metric("Est. Revenue", f"€{estimate['estimated_annual_revenue']:,.0f}/yr")
+                    st.metric("Est. Revenue", f"EUR {estimate['estimated_annual_revenue']:,.0f}/yr")
             except:
                 pass
         
@@ -545,13 +596,13 @@ def render_auto_generate_panel():
         col_btn1, col_btn2 = st.columns([2, 1])
         with col_btn1:
             generate_clicked = st.button(
-                "🚀 Generate Optimized Layout",
+                "Generate Optimized Layout",
                 type="primary",
                 use_container_width=True,
-                disabled=(boundary is None),
+                disabled=(boundary is None or invalid_vehicle_mix),
             )
         with col_btn2:
-            if st.button("🗑️ Clear Current", use_container_width=True):
+            if st.button("Clear Current", use_container_width=True):
                 st.session_state.layout.spaces = []
                 st.session_state.layout.lanes = []
                 st.rerun()
@@ -571,7 +622,7 @@ def render_auto_generate_panel():
         
         # Show optimization log
         if st.session_state.optimization_log:
-            st.markdown("#### 📝 Optimization Log")
+            st.markdown("#### Optimization Log")
             log_text = "\n".join(st.session_state.optimization_log)
             st.code(log_text, language=None)
 
@@ -597,7 +648,7 @@ def render_main_canvas():
 
 def render_space_list(compliance: ComplianceReport):
     """Render the list of parking spaces with edit/delete options."""
-    st.subheader("🅿️ Parking Spaces")
+    st.subheader("Parking Spaces")
     
     layout = st.session_state.layout
     
@@ -622,18 +673,18 @@ def render_space_list(compliance: ComplianceReport):
         with st.expander(f"**{type_name}** ({len(spaces)} spaces)", expanded=True):
             for space in spaces:
                 has_violation = space.id in violation_ids
-                icon = "⚠️" if has_violation else "✅"
                 
                 col1, col2, col3, col4 = st.columns([2, 3, 1, 1])
                 with col1:
-                    st.markdown(f"{icon} **{space.label}**")
+                    status = "Issue" if has_violation else "OK"
+                    st.markdown(f"**{space.label}**  `{status}`")
                 with col2:
                     st.caption(f"{space.length}m × {space.width}m @ ({space.x}, {space.y})")
                 with col3:
-                    if st.button("✏️", key=f"edit_{space.id}", help="Edit"):
+                    if st.button("Edit", key=f"edit_{space.id}", help="Edit"):
                         st.session_state.selected_space = space.id
                 with col4:
-                    if st.button("🗑️", key=f"del_{space.id}", help="Delete"):
+                    if st.button("Delete", key=f"del_{space.id}", help="Delete"):
                         layout.remove_space(space.id)
                         st.rerun()
 
@@ -648,7 +699,7 @@ def render_space_editor():
         st.session_state.selected_space = None
         return
     
-    st.subheader(f"✏️ Edit Space: {space.label}")
+    st.subheader(f"Edit Space: {space.label}")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -670,11 +721,11 @@ def render_space_editor():
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Done Editing", use_container_width=True):
+        if st.button("Done Editing", use_container_width=True):
             st.session_state.selected_space = None
             st.rerun()
     with col2:
-        if st.button("🗑️ Delete Space", use_container_width=True, type="secondary"):
+        if st.button("Delete Space", use_container_width=True, type="secondary"):
             st.session_state.layout.remove_space(space.id)
             st.session_state.selected_space = None
             st.rerun()
@@ -682,26 +733,26 @@ def render_space_editor():
 
 def render_compliance_panel(compliance: ComplianceReport):
     """Render the compliance status panel."""
-    st.subheader("📋 Compliance Check")
+    st.subheader("Compliance Check")
     
     # Overall status
     if compliance.errors > 0:
-        st.error(f"❌ **{compliance.errors} Errors** found")
+        st.error(f"**{compliance.errors} Errors** found")
     elif compliance.warnings > 0:
-        st.warning(f"⚠️ **{compliance.warnings} Warnings** found")
+        st.warning(f"**{compliance.warnings} Warnings** found")
     else:
-        st.success("✅ All checks passed!")
+        st.success("All checks passed")
     
     # Show violations
     if compliance.violations:
         for v in compliance.violations:
-            icon = "❌" if v.severity == "error" else "⚠️"
-            st.markdown(f"{icon} `{v.category}`: {v.message}")
+            prefix = "Error" if v.severity == "error" else "Warning"
+            st.markdown(f"**{prefix}** `{v.category}`: {v.message}")
 
 
 def render_revenue_panel():
     """Render the revenue calculator panel."""
-    st.subheader("💰 Revenue Calculator")
+    st.subheader("Revenue Calculator")
     
     layout = st.session_state.layout
     
@@ -739,10 +790,10 @@ def render_revenue_panel():
     
     # Breakeven occupancy
     breakeven = calculate_breakeven_occupancy(layout)
-    st.caption(f"💡 Breakeven occupancy: **{breakeven * 100:.1f}%**")
+    st.caption(f"Breakeven occupancy: **{breakeven * 100:.1f}%**")
     
     # Revenue chart
-    with st.expander("📊 Revenue Breakdown", expanded=False):
+    with st.expander("Revenue Breakdown", expanded=False):
         fig = create_revenue_chart(projection, layout)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -753,7 +804,7 @@ def render_scenario_comparison():
         st.info("Save scenarios using the sidebar to compare them here.")
         return
     
-    st.subheader("📊 Scenario Comparison")
+    st.subheader("Scenario Comparison")
     
     comparison_data = []
     for scenario in st.session_state.scenarios:
@@ -793,7 +844,7 @@ def render_summary_stats():
     counts = layout.count_by_type()
     total = sum(counts.values())
     
-    st.markdown("### 📈 Summary")
+    st.markdown("### Summary")
     
     cols = st.columns(len(counts) + 1)
     with cols[0]:
@@ -811,8 +862,8 @@ def main():
     render_sidebar()
     
     # Main content area
-    st.title("🚛 TruckParking Layout Optimizer")
-    st.markdown(f"*Location: Havenweg 4, Echt • Target: €{SITE['revenue_target']:,}/year*")
+    st.title("TruckParking Layout Optimizer")
+    st.markdown(f"*Location: Havenweg 4, Echt | Target: EUR {SITE['revenue_target']:,}/year*")
     
     # Auto-generate panel (collapsible)
     render_auto_generate_panel()
