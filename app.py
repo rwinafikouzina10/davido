@@ -132,6 +132,16 @@ st.markdown("""
     .stButton > button {
         border-radius: 10px;
     }
+    .stButton > button:not([kind="primary"]) {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+        font-weight: 700 !important;
+    }
+    .stButton > button:not([kind="primary"]):hover {
+        border-color: #94a3b8 !important;
+        background: #f8fafc !important;
+    }
     [data-testid="stTabs"] button[role="tab"] {
         border-radius: 10px 10px 0 0;
         font-weight: 700;
@@ -149,10 +159,31 @@ st.markdown("""
     [data-testid="stDataEditor"] * {
         color: #0f172a !important;
     }
+    [data-baseweb="input"] > div,
+    [data-baseweb="textarea"] > div,
+    [data-baseweb="select"] > div {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #0f172a !important;
+    }
     [data-baseweb="input"] input,
     [data-baseweb="textarea"] textarea,
-    [data-baseweb="select"] div {
+    [data-baseweb="select"] * {
         color: #0f172a !important;
+    }
+    [data-baseweb="tag"] {
+        background: #e2e8f0 !important;
+        color: #0f172a !important;
+    }
+    [data-baseweb="button-group"] button {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+    [data-baseweb="button-group"] button[aria-pressed="true"] {
+        background: #0ea5e9 !important;
+        color: #ffffff !important;
+        border-color: #0284c7 !important;
     }
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] summary * {
