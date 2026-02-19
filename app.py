@@ -148,6 +148,17 @@ st.markdown("""
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
     }
+    div[data-testid="stExpander"] details > summary {
+        background: #f8fafc !important;
+        border: 1px solid #dbe3ee !important;
+        border-radius: 10px !important;
+        padding: 0.45rem 0.7rem !important;
+    }
+    div[data-testid="stExpander"] details > summary,
+    div[data-testid="stExpander"] details > summary * {
+        color: #0f172a !important;
+        opacity: 1 !important;
+    }
     [data-testid="stDataFrame"] {
         border-radius: 10px;
         overflow: hidden;
@@ -182,6 +193,13 @@ st.markdown("""
     }
     [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
         color: #0f172a !important;
+    }
+    [data-testid="stRadio"] label,
+    [data-testid="stRadio"] label *,
+    [role="radiogroup"] label,
+    [role="radiogroup"] label * {
+        color: #0f172a !important;
+        opacity: 1 !important;
     }
     [data-testid="stDataEditor"] {
         border-radius: 12px;
@@ -224,6 +242,13 @@ st.markdown("""
     }
     [data-testid="stAlertContainer"] * {
         color: #0f172a !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stRadio"] label,
+    [data-testid="stSidebar"] [data-testid="stRadio"] label *,
+    [data-testid="stSidebar"] [role="radiogroup"] label,
+    [data-testid="stSidebar"] [role="radiogroup"] label * {
+        color: #e2e8f0 !important;
+        opacity: 1 !important;
     }
 </style>
 """, unsafe_allow_html=True)
