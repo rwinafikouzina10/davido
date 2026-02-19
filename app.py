@@ -5,6 +5,7 @@ A tool for optimizing truck parking lot layouts.
 
 import streamlit as st
 import json
+import pandas as pd
 
 # Local imports
 from src.models import Layout, ParkingSpace, Scenario
@@ -28,47 +29,112 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap');
+    :root {
+        --tp-bg-top: #f8fbff;
+        --tp-bg-bottom: #edf2f7;
+        --tp-ink: #0f172a;
+        --tp-muted: #64748b;
+        --tp-border: #d9e2ee;
+        --tp-card: #ffffff;
+        --tp-primary: #0ea5e9;
+        --tp-primary-ink: #ffffff;
+        --tp-sidebar-top: #0a1b31;
+        --tp-sidebar-bottom: #123153;
+    }
     .block-container {
-        padding-top: 1.25rem;
+        padding-top: 0.85rem;
         padding-bottom: 2rem;
-        max-width: 1300px;
+        max-width: 1360px;
     }
     .stApp {
         background:
-            radial-gradient(1200px 600px at -10% -20%, rgba(14, 165, 233, 0.12), transparent 60%),
-            radial-gradient(1000px 520px at 110% 5%, rgba(16, 185, 129, 0.1), transparent 60%),
-            linear-gradient(180deg, #0b1220 0%, #101827 100%);
-        color: #e5e7eb;
+            radial-gradient(1200px 450px at 0% -10%, rgba(56, 189, 248, 0.10), transparent 65%),
+            radial-gradient(900px 300px at 100% 0%, rgba(16, 185, 129, 0.08), transparent 65%),
+            linear-gradient(180deg, var(--tp-bg-top) 0%, var(--tp-bg-bottom) 100%);
+        color: var(--tp-ink);
+        font-family: 'Manrope', 'Segoe UI', sans-serif;
+    }
+    [data-testid="stAppViewContainer"] > .main {
+        background: transparent;
     }
     h1, h2, h3 {
-        color: #f8fafc !important;
-        letter-spacing: 0.01em;
+        color: var(--tp-ink) !important;
+        letter-spacing: 0;
+        font-weight: 800 !important;
+    }
+    p, li, label, .stMarkdown, .stCaption, [data-testid="stWidgetLabel"] {
+        font-family: 'Manrope', 'Segoe UI', sans-serif !important;
     }
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-        border-right: 1px solid rgba(148, 163, 184, 0.15);
+        background: linear-gradient(180deg, var(--tp-sidebar-top) 0%, var(--tp-sidebar-bottom) 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    [data-testid="stSidebar"] * {
+        color: #e2e8f0 !important;
+    }
+    .tp-kicker {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--tp-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.15rem;
+    }
+    .tp-section {
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid var(--tp-border);
+        border-radius: 14px;
+        padding: 0.75rem 0.9rem;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
     }
     [data-testid="stMetric"] {
-        background-color: rgba(15, 23, 42, 0.92);
-        padding: 15px;
+        background-color: var(--tp-card);
+        padding: 14px;
         border-radius: 12px;
-        border: 1px solid rgba(148, 163, 184, 0.24);
+        border: 1px solid var(--tp-border);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
     }
     [data-testid="stMetricLabel"] {
-        color: #cbd5e1 !important;
+        color: var(--tp-muted) !important;
+        font-weight: 700 !important;
     }
     [data-testid="stMetricValue"] {
-        color: #f8fafc !important;
-        font-size: 2rem !important;
+        color: var(--tp-ink) !important;
+        font-size: 1.4rem !important;
     }
     div[data-testid="stExpander"] {
-        background-color: rgba(2, 6, 23, 0.45);
-        border: 1px solid rgba(148, 163, 184, 0.15);
+        background-color: var(--tp-card);
+        border: 1px solid var(--tp-border);
         border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
     }
     [data-testid="stDataFrame"] {
         border-radius: 10px;
         overflow: hidden;
+    }
+    [data-testid="stHorizontalBlock"] [data-testid="stMetric"] {
+        min-height: 112px;
+    }
+    .stButton > button[kind="primary"] {
+        border-radius: 10px;
+        border: none;
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        color: var(--tp-primary-ink);
+        font-weight: 700;
+    }
+    .stButton > button {
+        border-radius: 10px;
+    }
+    [data-testid="stTabs"] button[role="tab"] {
+        border-radius: 10px 10px 0 0;
+        font-weight: 700;
+    }
+    [data-testid="stDataEditor"] {
+        border-radius: 12px;
+        border: 1px solid var(--tp-border);
+        overflow: hidden;
+        background: #fff;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -148,6 +214,28 @@ def extract_polygon_coords(geojson_obj):
         return [(float(c[0]), float(c[1])) for c in rings[0]]
 
     raise ValueError(f"Unsupported GeoJSON type: {obj_type}")
+
+
+def rotate_space(space: ParkingSpace, delta_degrees: int):
+    """Rotate a space by delta degrees with 0-345 wrap-around."""
+    space.rotation = float((int(space.rotation) + delta_degrees) % 360)
+
+
+def format_currency_compact(value: float) -> str:
+    """Compact human-readable currency."""
+    abs_val = abs(value)
+    if abs_val >= 1_000_000:
+        return f"EUR {value / 1_000_000:.2f}M"
+    if abs_val >= 1_000:
+        return f"EUR {value / 1_000:.1f}K"
+    return f"EUR {value:,.0f}"
+
+
+def refresh_space_labels(layout: Layout):
+    """Keep labels aligned with current ids/types."""
+    prefix_map = {"truck": "T", "tractor": "TR", "trailer": "TL", "ev": "EV", "van": "V"}
+    for s in layout.spaces:
+        s.label = f"{prefix_map.get(s.type, 'S')}-{s.id}"
 
 
 def init_session_state():
@@ -272,7 +360,7 @@ def render_add_space_form():
         y = st.number_input("Y Position (m)", min_value=0.0, max_value=float(max_y), value=5.0, step=1.0)
         width = st.number_input("Width (m)", min_value=1.0, max_value=10.0, value=specs["default_width"], step=0.5)
     
-    rotation = st.slider("Rotation (°)", min_value=0, max_value=90, value=0, step=15)
+    rotation = st.slider("Rotation (°)", min_value=0, max_value=345, value=0, step=15)
     
     if st.button("Add Space", type="primary", use_container_width=True):
         new_id = st.session_state.layout.get_next_id()
@@ -286,6 +374,7 @@ def render_add_space_form():
             rotation=rotation,
         )
         st.session_state.layout.add_space(new_space)
+        refresh_space_labels(st.session_state.layout)
         st.success(f"Added space {new_space.label}")
         st.rerun()
 
@@ -380,6 +469,7 @@ def run_optimization(
     lane_type,
     time_limit,
     vehicle_mix=None,
+    orientations=None,
 ):
     """Run the optimization and update session state."""
     try:
@@ -396,6 +486,7 @@ def run_optimization(
             exit_point=exit_point,
             optimization_goal=optimization_goal,
             lane_type=lane_type,
+            orientations=orientations,
             time_limit=time_limit,
             vehicle_mix=vehicle_mix,
             layout_name=st.session_state.layout.name or "Optimized Layout",
@@ -536,6 +627,13 @@ def render_auto_generate_panel():
                 format_func=lambda x: "One-Way (6m)" if x == "oneway" else "Two-Way (8m)",
                 horizontal=True,
             )
+
+            orientation_choices = st.multiselect(
+                "Allowed Space Orientations",
+                options=[0, 15, 30, 45, 60, 75, 90],
+                default=[0, 90],
+                help="Use this to allow angled parking in auto-generation.",
+            )
             
             time_limit = st.slider(
                 "Time Limit (seconds)",
@@ -582,13 +680,13 @@ def render_auto_generate_panel():
                 
                 est_cols = st.columns(4)
                 with est_cols[0]:
-                    st.metric("Total Area", f"{estimate['total_area']:,.0f} m²")
+                    st.metric("Total Area", f"{estimate['total_area']:,.0f} m²", border=True)
                 with est_cols[1]:
-                    st.metric("Parking Area", f"{estimate['estimated_parking_area']:,.0f} m²")
+                    st.metric("Parking Area", f"{estimate['estimated_parking_area']:,.0f} m²", border=True)
                 with est_cols[2]:
-                    st.metric("Est. Max Trucks", estimate['max_truck_spaces'])
+                    st.metric("Est. Max Trucks", estimate['max_truck_spaces'], border=True)
                 with est_cols[3]:
-                    st.metric("Est. Revenue", f"EUR {estimate['estimated_annual_revenue']:,.0f}/yr")
+                    st.metric("Est. Revenue", f"{format_currency_compact(estimate['estimated_annual_revenue'])}/yr", border=True)
             except:
                 pass
         
@@ -615,6 +713,7 @@ def render_auto_generate_panel():
                     exit_point=exit_point,
                     optimization_goal=optimization_goal,
                     lane_type=lane_type,
+                    orientations=orientation_choices or [0, 90],
                     time_limit=float(time_limit),
                     vehicle_mix=vehicle_mix if use_vehicle_mix else None,
                 )
@@ -627,13 +726,10 @@ def render_auto_generate_panel():
             st.code(log_text, language=None)
 
 
-def render_main_canvas():
+def render_main_canvas(compliance: ComplianceReport):
     """Render the main layout canvas."""
     layout = st.session_state.layout
-    
-    # Run compliance check
-    compliance = check_layout(layout)
-    
+
     # Create and display the figure
     fig = create_layout_figure(
         layout,
@@ -642,8 +738,6 @@ def render_main_canvas():
     )
     
     st.plotly_chart(fig, use_container_width=True)
-    
-    return compliance
 
 
 def render_space_list(compliance: ComplianceReport):
@@ -656,37 +750,99 @@ def render_space_list(compliance: ComplianceReport):
         st.info("No parking spaces yet. Use Auto-Generate or add manually!")
         return
     
-    # Group by type
-    by_type = {}
-    for space in layout.spaces:
-        if space.type not in by_type:
-            by_type[space.type] = []
-        by_type[space.type].append(space)
-    
-    # Get violation IDs
     violation_ids = set()
     for v in compliance.violations:
         violation_ids.update(v.space_ids)
-    
-    for space_type, spaces in by_type.items():
-        type_name = SPACE_TYPES.get(space_type, {}).get("name", space_type)
-        with st.expander(f"**{type_name}** ({len(spaces)} spaces)", expanded=True):
-            for space in spaces:
-                has_violation = space.id in violation_ids
-                
-                col1, col2, col3, col4 = st.columns([2, 3, 1, 1])
-                with col1:
-                    status = "Issue" if has_violation else "OK"
-                    st.markdown(f"**{space.label}**  `{status}`")
-                with col2:
-                    st.caption(f"{space.length}m × {space.width}m @ ({space.x}, {space.y})")
-                with col3:
-                    if st.button("Edit", key=f"edit_{space.id}", help="Edit"):
-                        st.session_state.selected_space = space.id
-                with col4:
-                    if st.button("Delete", key=f"del_{space.id}", help="Delete"):
-                        layout.remove_space(space.id)
-                        st.rerun()
+
+    rows = []
+    for s in layout.spaces:
+        rows.append({
+            "id": s.id,
+            "label": s.label,
+            "type": s.type,
+            "x": s.x,
+            "y": s.y,
+            "length": s.length,
+            "width": s.width,
+            "rotation": s.rotation,
+            "status": "Issue" if s.id in violation_ids else "OK",
+        })
+
+    table = pd.DataFrame(rows)
+    st.caption("Inline editing pattern: update values directly in the grid, then apply once.")
+    edited = st.data_editor(
+        table,
+        hide_index=True,
+        use_container_width=True,
+        disabled=("id", "label", "status"),
+        column_config={
+            "id": st.column_config.NumberColumn("ID"),
+            "label": st.column_config.TextColumn("Label"),
+            "type": st.column_config.SelectboxColumn("Type", options=list(SPACE_TYPES.keys())),
+            "x": st.column_config.NumberColumn("X (m)", step=0.5, format="%.1f"),
+            "y": st.column_config.NumberColumn("Y (m)", step=0.5, format="%.1f"),
+            "length": st.column_config.NumberColumn("Length (m)", step=0.5, format="%.1f"),
+            "width": st.column_config.NumberColumn("Width (m)", step=0.5, format="%.1f"),
+            "rotation": st.column_config.NumberColumn("Rotation", step=15, format="%.0f"),
+            "status": st.column_config.TextColumn("Status"),
+        },
+        key="spaces_table_editor",
+    )
+
+    col_apply, col_edit, col_del = st.columns([1.3, 1, 1])
+    with col_apply:
+        if st.button("Apply Table Changes", type="primary", use_container_width=True):
+            space_map = {s.id: s for s in layout.spaces}
+            for _, row in edited.iterrows():
+                sid = int(row["id"])
+                if sid not in space_map:
+                    continue
+                s = space_map[sid]
+                s.type = str(row["type"])
+                s.x = float(row["x"])
+                s.y = float(row["y"])
+                s.length = float(row["length"])
+                s.width = float(row["width"])
+                s.rotation = float(row["rotation"]) % 360
+            refresh_space_labels(layout)
+            st.success("Parking space changes applied")
+            st.rerun()
+    with col_edit:
+        edit_target = st.selectbox("Edit Space", options=[s.id for s in layout.spaces], format_func=lambda sid: f"Space {sid}")
+        if st.button("Open Editor", use_container_width=True):
+            st.session_state.selected_space = int(edit_target)
+            st.rerun()
+    with col_del:
+        delete_ids = st.multiselect("Delete IDs", options=[s.id for s in layout.spaces], default=[])
+        if st.button("Delete Selected", use_container_width=True):
+            for sid in delete_ids:
+                layout.remove_space(int(sid))
+            refresh_space_labels(layout)
+            st.success(f"Deleted {len(delete_ids)} space(s)")
+            st.rerun()
+
+    st.markdown("#### Quick Rotate")
+    rot_col1, rot_col2, rot_col3, rot_col4 = st.columns([2, 1, 1, 1])
+    with rot_col1:
+        rotate_ids = st.multiselect("IDs", options=[s.id for s in layout.spaces], default=[])
+    with rot_col2:
+        rotate_step = st.segmented_control("Step", [15, 30, 45], default=15, key="rotate_step")
+    with rot_col3:
+        rotate_left = st.button("Rotate -", use_container_width=True)
+    with rot_col4:
+        rotate_right = st.button("Rotate +", use_container_width=True)
+    if rotate_left and rotate_ids:
+        for sid in rotate_ids:
+            sp = layout.get_space_by_id(int(sid))
+            if sp:
+                rotate_space(sp, -int(rotate_step or 15))
+        st.rerun()
+    if rotate_right and rotate_ids:
+        for sid in rotate_ids:
+            sp = layout.get_space_by_id(int(sid))
+            if sp:
+                rotate_space(sp, int(rotate_step or 15))
+        st.rerun()
 
 
 def render_space_editor():
@@ -717,11 +873,12 @@ def render_space_editor():
         key="edit_type",
     )
     
-    space.rotation = st.slider("Rotation", 0, 90, int(space.rotation), 15, key="edit_rotation")
+    space.rotation = st.slider("Rotation", 0, 345, int(space.rotation) % 360, 15, key="edit_rotation")
     
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Done Editing", use_container_width=True):
+            refresh_space_labels(st.session_state.layout)
             st.session_state.selected_space = None
             st.rerun()
     with col2:
@@ -743,11 +900,15 @@ def render_compliance_panel(compliance: ComplianceReport):
     else:
         st.success("All checks passed")
     
-    # Show violations
     if compliance.violations:
+        by_category = {}
         for v in compliance.violations:
-            prefix = "Error" if v.severity == "error" else "Warning"
-            st.markdown(f"**{prefix}** `{v.category}`: {v.message}")
+            by_category[v.category] = by_category.get(v.category, 0) + 1
+        st.caption("Category counts: " + ", ".join(f"{k} {n}" for k, n in by_category.items()))
+        with st.expander("Violation Details", expanded=False):
+            for v in compliance.violations:
+                prefix = "Error" if v.severity == "error" else "Warning"
+                st.markdown(f"**{prefix}** `{v.category}`: {v.message}")
 
 
 def render_revenue_panel():
@@ -769,24 +930,26 @@ def render_revenue_panel():
     projection = calculate_revenue(layout, st.session_state.occupancy_rate / 100)
     
     # Key metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2, gap="small")
     with col1:
-        st.metric("Daily", f"€{projection.daily:,.0f}")
+        st.metric("Daily", format_currency_compact(projection.daily), border=True)
     with col2:
-        st.metric("Weekly", f"€{projection.weekly:,.0f}")
+        st.metric("Weekly", format_currency_compact(projection.weekly), border=True)
+    col3, col4 = st.columns(2, gap="small")
     with col3:
-        st.metric("Monthly", f"€{projection.monthly:,.0f}")
+        st.metric("Monthly", format_currency_compact(projection.monthly), border=True)
     with col4:
         delta_color = "normal" if projection.meets_target else "inverse"
         st.metric(
             "Annual",
-            f"€{projection.annual:,.0f}",
+            format_currency_compact(projection.annual),
             f"{projection.target_percentage - 100:.1f}% vs target",
             delta_color=delta_color,
+            border=True,
         )
     
     # Target status
-    st.markdown(f"**Target: €{projection.target:,.0f}/year** → {projection.status}")
+    st.markdown(f"**Target: {format_currency_compact(projection.target)}/year** -> {projection.status}")
     
     # Breakeven occupancy
     breakeven = calculate_breakeven_occupancy(layout)
@@ -844,16 +1007,17 @@ def render_summary_stats():
     counts = layout.count_by_type()
     total = sum(counts.values())
     
+    st.markdown('<div class="tp-kicker">Dashboard</div>', unsafe_allow_html=True)
     st.markdown("### Summary")
     
     cols = st.columns(len(counts) + 1)
     with cols[0]:
-        st.metric("Total Spaces", total)
+        st.metric("Total Spaces", total, border=True)
     
     for i, (space_type, count) in enumerate(counts.items()):
         with cols[i + 1]:
             name = SPACE_TYPES.get(space_type, {}).get("name", space_type).split()[0]
-            st.metric(name, count)
+            st.metric(name, count, border=True)
 
 
 def main():
@@ -862,45 +1026,49 @@ def main():
     render_sidebar()
     
     # Main content area
+    st.markdown('<div class="tp-kicker">Planning Workspace</div>', unsafe_allow_html=True)
     st.title("TruckParking Layout Optimizer")
-    st.markdown(f"*Location: Havenweg 4, Echt | Target: EUR {SITE['revenue_target']:,}/year*")
+    st.caption(f"Location: Havenweg 4, Echt | Revenue target: {format_currency_compact(SITE['revenue_target'])}/year")
     
-    # Auto-generate panel (collapsible)
+    st.markdown('<div class="tp-section">', unsafe_allow_html=True)
     render_auto_generate_panel()
+    st.markdown("</div>", unsafe_allow_html=True)
     
-    # Summary stats at top
+    st.markdown('<div class="tp-section">', unsafe_allow_html=True)
     render_summary_stats()
+    st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("---")
     
+    compliance = check_layout(st.session_state.layout)
+
     # Main layout area
-    col1, col2 = st.columns([2, 1])
-    
+    col1, col2 = st.columns([1.9, 1.1])
+
     with col1:
-        compliance = render_main_canvas()
-        
-        # Space editor (if space selected)
-        render_space_editor()
-    
+        main_tabs = st.tabs(["Parking Spaces", "Layout Canvas"])
+        with main_tabs[0]:
+            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+            render_space_list(compliance)
+            render_space_editor()
+            st.markdown("</div>", unsafe_allow_html=True)
+        with main_tabs[1]:
+            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+            render_main_canvas(compliance)
+            st.markdown("</div>", unsafe_allow_html=True)
+
     with col2:
-        # Compliance panel
-        render_compliance_panel(compliance)
-        
-        st.markdown("---")
-        
-        # Revenue panel
-        render_revenue_panel()
-    
-    st.markdown("---")
-    
-    # Bottom section: Space list and scenarios
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        render_space_list(compliance)
-    
-    with col2:
-        render_scenario_comparison()
+        right_tabs = st.tabs(["Compliance & Revenue", "Scenarios"])
+        with right_tabs[0]:
+            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+            render_compliance_panel(compliance)
+            st.markdown("---")
+            render_revenue_panel()
+            st.markdown("</div>", unsafe_allow_html=True)
+        with right_tabs[1]:
+            st.markdown('<div class="tp-section">', unsafe_allow_html=True)
+            render_scenario_comparison()
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

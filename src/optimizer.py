@@ -453,6 +453,7 @@ def optimize_layout(
     optimization_goal: str = "maximize_revenue",
     time_limit: float = 30.0,
     lane_type: str = "oneway",
+    orientations: Optional[List[float]] = None,
     layout_name: str = "Optimized Layout",
     callback: Optional[Callable] = None,
 ) -> OptimizationResult:
@@ -467,6 +468,7 @@ def optimize_layout(
         optimization_goal: "maximize_revenue", "maximize_count", or "maximize_trucks"
         time_limit: Maximum solving time in seconds
         lane_type: "oneway" or "twoway"
+        orientations: Optional list of allowed placement angles in degrees
         layout_name: Name for the generated layout
         callback: Progress callback function(message: str)
         
@@ -503,6 +505,8 @@ def optimize_layout(
         goal=goal,
         vehicle_mix=vehicle_mix,
     )
+    if orientations:
+        config.orientations = sorted(set(float(o) for o in orientations))
     
     # Create boundary polygon
     boundary_poly = coords_to_polygon(boundary)

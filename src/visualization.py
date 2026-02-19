@@ -42,28 +42,46 @@ def create_layout_figure(
         for v in compliance_report.violations:
             violation_space_ids.update(v.space_ids)
     
-    # Draw parking spaces
+    # Draw lanes
+    for lane in layout.lanes:
+        path = lane.path
+        if len(path) >= 2:
+            lane_poly = line_to_lane_polygon(path, lane.width)
+            if not lane_poly.is_empty:
+                lane_coords = list(lane_poly.exterior.coords)
+                fig.add_trace(go.Scatter(
+                    x=[p[0] for p in lane_coords],
+                    y=[p[1] for p in lane_coords],
+                    mode="lines",
+                    name=f"Lane: {lane.id}",
+                    line=dict(color=COLORS["lane"], width=1),
+                    fill="toself",
+                    fillcolor="rgba(149, 165, 166, 0.3)",
+                    showlegend=False,
+                ))
+
+    # Draw parking spaces after lanes so they remain visible.
     for space in layout.spaces:
         color = COLORS.get(space.type, "#888888")
-        
+
         # Determine if this space has violations
         has_violation = space.id in violation_space_ids
         is_highlighted = space.id == highlight_space
-        
+
         # Modify appearance based on state
         if has_violation:
             border_color = COLORS["violation"]
             border_width = 3
-            opacity = 0.7
+            opacity = 0.78
         elif is_highlighted:
-            border_color = "#000000"
+            border_color = "#111827"
             border_width = 3
             opacity = 1.0
         else:
             border_color = color
             border_width = 1
-            opacity = 0.8
-        
+            opacity = 0.88
+
         # Render rotated geometry accurately.
         space_poly = Rectangle(space.x, space.y, space.length, space.width, space.rotation).to_polygon()
         coords = list(space_poly.exterior.coords)
@@ -80,9 +98,9 @@ def create_layout_figure(
             opacity=opacity,
             name=space.label,
             showlegend=False,
-            hoverinfo="skip",
+            hovertemplate=f"{space.label}<br>{SPACE_TYPES.get(space.type, {}).get('name', space.type)}<extra></extra>",
         ))
-        
+
         # Add label
         if show_labels:
             center = space_poly.centroid
@@ -93,24 +111,6 @@ def create_layout_figure(
                 showarrow=False,
                 font=dict(size=10, color="white"),
             )
-    
-    # Draw lanes
-    for lane in layout.lanes:
-        path = lane.path
-        if len(path) >= 2:
-            lane_poly = line_to_lane_polygon(path, lane.width)
-            if not lane_poly.is_empty:
-                lane_coords = list(lane_poly.exterior.coords)
-                fig.add_trace(go.Scatter(
-                    x=[p[0] for p in lane_coords],
-                    y=[p[1] for p in lane_coords],
-                    mode="lines",
-                    name=f"Lane: {lane.id}",
-                    line=dict(color=COLORS["lane"], width=1),
-                    fill="toself",
-                    fillcolor="rgba(149, 165, 166, 0.5)",
-                    showlegend=False,
-                ))
 
     boundary_poly = Polygon(boundary)
     min_x, min_y, max_x, max_y = boundary_poly.bounds
@@ -133,13 +133,16 @@ def create_layout_figure(
         width=width,
         height=height,
         showlegend=False,
-        plot_bgcolor="white",
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#f8fafc",
         hovermode="closest",
+        margin=dict(l=10, r=10, t=45, b=10),
     )
     
     # Add grid
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="rgba(0,0,0,0.1)")
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="rgba(0,0,0,0.1)")
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="rgba(15,23,42,0.08)", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="rgba(15,23,42,0.08)", zeroline=False)
     
     return fig
 
@@ -205,6 +208,10 @@ def create_revenue_chart(revenue_projection, layout) -> go.Figure:
         yaxis_title="Annual Revenue (€)",
         height=400,
         showlegend=False,
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#ffffff",
+        margin=dict(l=10, r=10, t=45, b=10),
     )
     
     return fig
@@ -242,6 +249,10 @@ def create_scenario_comparison_chart(comparison_data: list) -> go.Figure:
         yaxis_title="Annual Revenue (€)",
         height=400,
         showlegend=False,
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#ffffff",
+        margin=dict(l=10, r=10, t=45, b=10),
     )
     
     return fig
